@@ -120,7 +120,7 @@ function exportExcel() {
 
     // redirect export
     window.location.href =
-        "<?= site_url('report/export_excel_all'); ?>?m=" + bulan + "&y=" + tahun;
+        "<?= site_url('report/export_excel_all_new'); ?>?m=" + bulan + "&y=" + tahun;
 }
 </script>
 

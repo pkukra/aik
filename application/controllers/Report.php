@@ -72,7 +72,7 @@ class Report extends CI_Controller {
         $this->load->view('templates/footer');
     }
 
-
+    
 
     // Halaman tambah
     public function add() {
@@ -399,6 +399,122 @@ class Report extends CI_Controller {
         exit;
     }
 
-
     
+    public function export_excel_all_new()
+    {
+        include APPPATH.'third_party/PHPExcel.php';
+
+        $m = (int) $this->input->get('m');
+        $y = (int) $this->input->get('y');
+
+        $bulanIndo = [
+            1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',
+            5=>'Mei',6=>'Juni',7=>'Juli',8=>'Agustus',
+            9=>'September',10=>'Oktober',11=>'November',12=>'Desember'
+        ];
+        $namaBulan = $bulanIndo[$m];
+
+        $list = $this->Report_model->get_report_with_poin($m, $y);
+
+        // ===============================
+        // GROUP DATA PER UNIT
+        // ===============================
+        $groupUnit = [];
+        foreach ($list as $u) {
+            $groupUnit[$u->nama_unit][] = $u;
+        }
+
+        $excel = new PHPExcel();
+        $excel->removeSheetByIndex(0);
+
+        $sheetIndex = 0;
+
+        foreach ($groupUnit as $namaUnit => $users) {
+
+            $sheet = $excel->createSheet($sheetIndex);
+
+            // max 31 char (aturan excel)
+            $sheetName = substr(preg_replace('/[\\\\\\/\\?\\*\\[\\]]/', '', $namaUnit), 0, 31);
+            $sheet->setTitle($sheetName);
+
+            // ===== JUDUL =====
+            $sheet->setCellValue('A1', 'LAPORAN USER');
+            $sheet->setCellValue('A2', 'Unit : '.$namaUnit);
+            $sheet->setCellValue('A3', 'Bulan '.$namaBulan.' '.$y);
+
+            $sheet->mergeCells('A1:F1');
+            $sheet->mergeCells('A2:F2');
+            $sheet->mergeCells('A3:F3');
+
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+            $sheet->getStyle('A1:F3')->getAlignment()
+                ->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
+
+            // ===== HEADER =====
+            $sheet->setCellValue('A5', 'No');
+            $sheet->setCellValue('B5', 'Nama');
+            $sheet->setCellValue('C5', 'Poin');
+            $sheet->setCellValue('D5', 'Persen Poin');
+            $sheet->setCellValue('E5', 'Majelis Taklim');
+            $sheet->setCellValue('F5', 'Persen Majelis Taklim');
+
+            $sheet->getStyle('A5:F5')->getFont()->setBold(true);
+
+            // ===== DATA =====
+            $row = 6;
+            $no = 1;
+
+            foreach ($users as $u) {
+                $sheet->setCellValue('A'.$row, $no++);
+                $sheet->setCellValue('B'.$row, $u->nama);
+                $sheet->setCellValue('C'.$row, $u->total_poin);
+                // hindari pembagian nol (optional aman)
+                $persen = ($u->total_poin > 0) ? ($u->total_poin / 2000) : 0;
+
+                $sheet->setCellValue('D'.$row, $persen);
+
+                // format persen (2 angka belakang koma)
+                $sheet->getStyle('D'.$row)
+                    ->getNumberFormat()
+                    ->setFormatCode(PHPExcel_Style_NumberFormat::FORMAT_PERCENTAGE_00);
+                $row++;
+            }
+
+            // ===== STYLE =====
+            $lastRow = $row - 1;
+
+            $styleBorder = [
+                'borders' => [
+                    'allborders' => [
+                        'style' => PHPExcel_Style_Border::BORDER_THIN
+                    ]
+                ]
+            ];
+
+            $sheet->getStyle('A5:F'.$lastRow)->applyFromArray($styleBorder);
+
+            foreach(range('A','F') as $col){
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            // freeze header
+            $sheet->freezePane('A6');
+
+            $sheetIndex++;
+        }
+
+        $excel->setActiveSheetIndex(0);
+
+        $filename = "Report_All_{$namaBulan}_{$y}.xlsx";
+
+        ob_end_clean();
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header("Content-Disposition: attachment; filename=\"$filename\"");
+        header('Cache-Control: max-age=0');
+
+        $writer = PHPExcel_IOFactory::createWriter($excel, 'Excel2007');
+        $writer->save('php://output');
+        exit;
+    }
 }
